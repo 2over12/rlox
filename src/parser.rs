@@ -48,17 +48,65 @@ impl<'a> Parser<'a> {
     	res
     }
 
-
     fn var_declaration(&mut self) -> Result<Stmt> {
     	let name = self.consume(TokenType::Identifier, "Expected variable name.")?;
 
-    	let mut init = Expr::Literal(Literal::Nil);
+    	let mut init = None;
     	if self.curr_match(&vec![TokenType::Equal]) {
-    		init = self.expression()?;
+    		init = Some(self.expression()?);
     	}
 
     	self.consume(TokenType::Semicolon, "Expected ';' after the variable declaration")?;
     	Ok(Stmt::Var(name,init))
+    }
+
+
+    fn for_statement(&mut self) -> Result<Stmt> {
+        self.consume(TokenType::LeftParen, "Expected '(' after 'for'.")?;
+        let init = if self.curr_match(&vec![TokenType::Semicolon]) {
+            None
+        } else if self.curr_match(&vec![TokenType::Var]) {
+            Some(self.var_declaration()?)
+        } else {
+            Some(self.expression_statement()?)
+        };
+
+        let cond = if !self.check(&TokenType::Semicolon) {
+            Some(self.expression()?)
+        } else {
+            None
+        };
+
+        self.consume(TokenType::Semicolon, "Expected ';' after loop condition")?;
+
+        let increment = if !self.check(&TokenType::RightParen) {
+            Some(self.expression()?)
+        } else {
+            None
+        };
+
+        self.consume(TokenType::RightParen, "Expected ')' after for clauses.")?;
+
+        let body = self.statement()?;
+
+        let body = if let Some(increment) = increment {
+            Stmt::Block(vec![body,Stmt::Expr(increment)])
+        } else {
+            body
+        };
+
+        let cond = Box::new(cond.unwrap_or(Expr::Literal(Literal::Boolean(true))));
+        let body = Box::new(body);
+
+        let wstmt = Stmt::While(cond,body);
+
+        let full_stmt = if let Some(init) = init {
+            Stmt::Block(vec![init,wstmt])
+        } else {
+            wstmt
+        };
+
+        Ok(full_stmt)
     }
 
     fn statement(&mut self) -> Result<Stmt> {
@@ -66,10 +114,41 @@ impl<'a> Parser<'a> {
     		return self.print_statement()
     	} else if self.curr_match(&vec![TokenType::LeftBrace]) {
             return self.block()
+        } else if self.curr_match(&vec![TokenType::If]) {
+            return self.if_statement()
+        } else if self.curr_match(&vec![TokenType::While]) {
+            self.while_statement()
+        } else if self.curr_match(&vec![TokenType::For]) {
+            self.for_statement()
         } else {
     		return self.expression_statement()
     	}
     }
+
+    fn while_statement(&mut self) -> Result<Stmt> {
+        self.consume(TokenType::LeftParen, "Expected '(' after while")?;
+        let cond = Box::new(self.expression()?);
+        self.consume(TokenType::RightParen, "Expected ')' after condition")?;
+        let then = Box::new(self.statement()?);
+        Ok(Stmt::While(cond,then))
+    }
+
+
+    fn if_statement(&mut self) -> Result<Stmt> {
+        self.consume(TokenType::LeftParen, "Expected '(' after if")?;
+        let cond = Box::new(self.expression()?);
+        self.consume(TokenType::RightParen, "Expected ')' after condition")?;
+        let then = Box::new(self.statement()?);
+
+        Ok(Stmt::If(cond,then, Box::new(if self.curr_match(&vec![TokenType::Else]) {
+            let otherwise = self.statement()?;
+            Some(otherwise)
+        } else {
+            None
+        })))
+
+    }
+
 
     fn block(&mut self) -> Result<Stmt> {
         let mut statements = Vec::new();
@@ -290,15 +369,23 @@ impl<'a> Parser<'a> {
         )
     }
 
+    
+    fn logic_and(&mut self) -> Result<Expr> {
+        self.match_two_operand(vec![TokenType::And], |x: &mut Parser| x.equality(),|left,op,right| Expr::Logical(left,op,right))
+    }
+
+    fn logic_or(&mut self) -> Result<Expr> {
+        self.match_two_operand(vec![TokenType::Or], |x: &mut Parser| x.logic_and(), |left,op,right| Expr::Logical(left,op,right))
+    }
 
     fn ternary(&mut self) -> Result<Expr> {
-    	let left = self.equality()?;
+    	let left = self.logic_or()?;
 
     	if self.curr_match(&vec![TokenType::QuestionMark]) {
     		let tk = self.previous.take().unwrap();
-    		let t_cond = self.equality()?;
+    		let t_cond = self.logic_or()?;
     		self.consume(TokenType::Colon, "Expected to find ':' after expr")?;
-    		let f_cond = self.equality()?;
+    		let f_cond = self.logic_or()?;
     		Ok(Expr::Ternary(tk,Box::new(left), Box::new(t_cond), Box::new(f_cond)))
 
     	} else {
@@ -318,12 +405,21 @@ impl<'a> Parser<'a> {
         matchees: Vec<TokenType>,
         higher_precedence: T,
     ) -> Result<Expr> {
+        self.match_two_operand(matchees, higher_precedence, |left,op,right| Expr::Binary(left,op,right))
+    }
+
+    fn match_two_operand<T: Fn(&mut Parser) -> Result<Expr>, V: Fn(Box<Expr>,Token,Box<Expr>) -> Expr>(
+        &mut self,
+        matchees: Vec<TokenType>,
+        higher_precedence: T,
+        combinator: V,
+    ) -> Result<Expr> {
         let mut expr = higher_precedence(self)?;
 
         while self.curr_match(&matchees) {
             let op = self.previous().unwrap();
             let right = higher_precedence(self)?;
-            expr = Expr::Binary(Box::new(expr), op, Box::new(right));
+            expr = combinator(Box::new(expr), op, Box::new(right));
         }
         Ok(expr)
     }

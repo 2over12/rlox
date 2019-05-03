@@ -9,7 +9,8 @@ pub enum Expr {
 	Literal(Literal),
 	Var(Token),
 	Unary(Token, Box<Expr>),
-	Assignment(Token, Box<Expr>)
+	Assignment(Token, Box<Expr>),
+	Logical(Box<Expr>, Token, Box<Expr>)
 }
 
 
@@ -17,8 +18,10 @@ pub enum Expr {
 pub enum Stmt {
 	Print(Expr),
 	Expr(Expr),
-	Var(Token, Expr),
-	Block(Vec<Stmt>)
+	Var(Token, Option<Expr>),
+	Block(Vec<Stmt>),
+	If(Box<Expr>, Box<Stmt>, Box<Option<Stmt>>),
+	While(Box<Expr>, Box<Stmt>)
 }
 
 impl Stmt {
@@ -27,7 +30,9 @@ impl Stmt {
 			Stmt::Print(exp) => visitor.visit_print(exp),
 			Stmt::Expr(exp) => visitor.visit_expr_statement(exp),
 			Stmt::Var(name,expr) => visitor.visit_variable(name, expr),
-			Stmt::Block(stmts) => visitor.visit_block_stmt(stmts)
+			Stmt::Block(stmts) => visitor.visit_block_stmt(stmts),
+			Stmt::If(cond, then, otherwise) => visitor.visit_if(cond,then,otherwise),
+			Stmt::While(cond, then) => visitor.visit_while(cond,then)
 		}
 	}
 }
@@ -35,8 +40,10 @@ impl Stmt {
 pub trait StmtVisitor <R> {
 	fn visit_print(self, expr: &Expr) -> R;
 	fn visit_expr_statement(self, expr: &Expr) -> R;
-	fn visit_variable(self, name: &Token, expr: &Expr) -> R;
+	fn visit_variable(self, name: &Token, expr: &Option<Expr>) -> R;
 	fn visit_block_stmt(self,stmts: &Vec<Stmt>) -> R; 
+	fn visit_if(self, cond: &Expr, then: &Stmt, otherwise: &Option<Stmt>) -> R;
+	fn visit_while(self, cond: &Expr, then: &Stmt) -> R;
 }
 
 pub trait ExprVisitor <R> {
@@ -47,6 +54,7 @@ pub trait ExprVisitor <R> {
 	fn visit_ternary(self, op: &Token, left: &Expr, middle: &Expr, right: &Expr) -> R;
 	fn visit_assignment(self, name: &Token, value: &Expr) -> R;
 	fn visit_variable_expr(self, name: &Token) -> R;
+	fn visit_logical(self, left: &Expr, op: &Token, right: &Expr) -> R;
 }
 
 impl Expr {
@@ -58,7 +66,8 @@ impl Expr {
 			Expr::Unary(op, exp) =>  visitor.visit_unary(op, exp),
 			Expr::Ternary(op, left, middle, right) => visitor.visit_ternary(op, left, middle, right),
 			Expr::Var(nm) => visitor.visit_variable_expr(nm),
-			Expr::Assignment(nm, val) => visitor.visit_assignment(nm, val)
+			Expr::Assignment(nm, val) => visitor.visit_assignment(nm, val),
+			Expr::Logical(left,op,right) => visitor.visit_logical(left, op, right)
 		}
 	} 
 }
@@ -89,6 +98,18 @@ impl ExprVisitor<String> for &PrettyPrint {
 		total.push_str(&name.get_lexeme());
 		total.push(' ');
 		total.push_str(&value.accept(self));
+		total.push(')');
+		total
+	}
+
+	fn visit_logical(self, left: &Expr, op: &Token, right: &Expr) -> String {
+		let mut total = String::new();
+		total.push('(');
+		total.push_str(&op.get_lexeme());
+		total.push(' ');
+		total.push_str(&left.accept(self));
+		total.push(' ');
+		total.push_str(&right.accept(self));
 		total.push(')');
 		total
 	}

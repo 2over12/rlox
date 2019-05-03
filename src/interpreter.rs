@@ -52,6 +52,28 @@ impl StmtVisitor<Result<()>> for &mut Interpreter {
 		Ok(())
 	}
 
+	fn visit_while(self,cond: &Expr, then: &Stmt) -> Result<()> {
+		while is_truthy(&(self.evaluate(cond)?)) {
+			self.execute(then)?;
+		}
+
+		Ok(())
+	}
+
+	fn visit_if(self, cond: &Expr,then: &Stmt, otherwise: &Option<Stmt>) -> Result<()> {
+		let cond = self.evaluate(cond)?;
+
+		if is_truthy(&cond) {
+			self.execute(then)
+		} else {
+			if let Some(otherwise) = otherwise {
+				self.execute(otherwise)
+			} else {
+				Ok(())
+			}
+		}
+	}
+
 	fn visit_block_stmt(self, stmts: &Vec<Stmt>) -> Result<()> {
 		self.env.push_new();
 
@@ -69,8 +91,13 @@ impl StmtVisitor<Result<()>> for &mut Interpreter {
 		
 	}
 
-	fn visit_variable(self, name: &Token, init: &Expr) -> Result<()> {
-		let value = self.evaluate(init)?;
+	fn visit_variable(self, name: &Token, init: &Option<Expr>) -> Result<()> {
+		let value = if let Some(init) = init {
+			Some(self.evaluate(init)?)
+		} else {
+			None
+		};
+
 		self.env.define(name.get_lexeme().to_owned(), value);
 		Ok(())
 	}
@@ -87,6 +114,22 @@ impl ExprVisitor<Result<Literal>> for &mut Interpreter {
 
 	fn visit_literal(self, ltrl: &Literal) -> Result<Literal> {
 		Ok(ltrl.clone())
+	}
+
+	fn visit_logical(self, left: &Expr, op: &Token, right: &Expr) -> Result<Literal> {
+		let left = self.evaluate(left)?;
+
+		if let TokenType::Or = op.get_type() {
+			if is_truthy(&left) {
+				return Ok(left);
+			}
+		} else {
+			if !is_truthy(&left) {
+				return Ok(left);
+			}
+		}
+
+		self.evaluate(right)
 	}
 
 
@@ -118,10 +161,9 @@ impl ExprVisitor<Result<Literal>> for &mut Interpreter {
 	}
 
 
-	fn visit_ternary(self, op: &Token, left: &Expr, middle: &Expr, right: &Expr) -> Result<Literal> {
+	fn visit_ternary(self, _op: &Token, left: &Expr, middle: &Expr, right: &Expr) -> Result<Literal> {
 		let left = self.evaluate(left)?;
-		let left = unpack_bool(left, op)?;
-		if left {
+		if is_truthy(&left) {
 			middle.accept(self)
 		} else {
 			right.accept(self)

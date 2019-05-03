@@ -9,7 +9,7 @@ use std::io::BufRead;
 
 
 fn main() {
-    let matches = App::new("jlox interpreter")
+    let matches = App::new("rlox interpreter")
     .version(".01").author("Ian Smith").arg(Arg::with_name("SCRIPT").help("The script to run").required(false).index(1)).get_matches();
     let script = matches.value_of("SCRIPT");
 

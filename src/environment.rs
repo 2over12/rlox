@@ -28,7 +28,7 @@ impl Stack {
 		self.current = old.unwrap();
 	}
 
-	pub fn define(&mut self, name: String, value: Literal) {
+	pub fn define(&mut self, name: String, value: Option<Literal>) {
 		self.current.define(name, value)
 	}
 
@@ -47,6 +47,16 @@ impl Stack {
 	}
 
 	pub fn get(&self, tk: &Token) -> Result<Literal> {
+		let lt = self.get_helper(tk)?;
+
+		if let Some(lt) = lt {
+			Ok(lt)
+		} else {
+			Err(InterpreterError::new(tk,"Uninitialized variable"))
+		}
+	}
+
+	fn get_helper(&self, tk: &Token) -> Result<Option<Literal>> {
 		if let Ok(val) = self.current.get(tk) {
 			Ok(val)
 		} else {
@@ -63,7 +73,7 @@ impl Stack {
 }
 
 struct Environment {
-	values: HashMap<String, Literal>
+	values: HashMap<String, Option<Literal>>
 }
 
 
@@ -75,11 +85,11 @@ impl Environment {
 		}
 	}
 
-	pub fn define(&mut self, name: String, value: Literal) {
+	pub fn define(&mut self, name: String, value: Option<Literal>) {
 		self.values.insert(name, value);
 	}
 
-	pub fn get(&self, tk: &Token) -> Result<Literal> {
+	pub fn get(&self, tk: &Token) -> Result<Option<Literal>> {
 		if let Some(val) = self.values.get(tk.get_lexeme()) {
 			Ok(val.clone())
 		} else {
@@ -91,7 +101,7 @@ impl Environment {
 		if !self.values.contains_key(name.get_lexeme()) {
 			Err(InterpreterError::new(name, " Undefined variable"))
 		} else {
-			self.values.insert(name.get_lexeme().to_owned(), value);
+			self.values.insert(name.get_lexeme().to_owned(), Some(value));
 			Ok(())
 		}
 	}
