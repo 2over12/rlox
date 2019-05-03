@@ -33,7 +33,21 @@ impl InterpreterError {
 	}
 }
 
-pub type Result<T> = std::result::Result<T,InterpreterError>;
+pub enum RuntimeError {
+	BreakSentinel,
+	InterpreterError(InterpreterError)
+}
+
+impl RuntimeError {
+	pub fn get_msg(&self) -> &str {
+		match self {
+			RuntimeError::BreakSentinel => "Break ran without encapsulating loop. Report this bug in the interpreter.",
+			RuntimeError::InterpreterError(ie) => ie.get_msg()
+		}
+	}
+}
+
+pub type Result<T> = std::result::Result<T,RuntimeError>;
 
 impl Interpreter {
 	fn evaluate(&mut self, expr: &Expr) -> Result<Literal> {
@@ -52,9 +66,18 @@ impl StmtVisitor<Result<()>> for &mut Interpreter {
 		Ok(())
 	}
 
+	fn visit_break(self, _line: usize) -> Result<()> {
+		Err(RuntimeError::BreakSentinel)
+	}
+
 	fn visit_while(self,cond: &Expr, then: &Stmt) -> Result<()> {
 		while is_truthy(&(self.evaluate(cond)?)) {
-			self.execute(then)?;
+			let res = self.execute(then);
+			if let Err(RuntimeError::BreakSentinel) =  res {
+				break;
+			} else {
+				res?;
+			}
 		}
 
 		Ok(())
@@ -182,7 +205,7 @@ impl ExprVisitor<Result<Literal>> for &mut Interpreter {
 				match op.get_type() {
 					TokenType::Minus => Ok(Literal::Number(left - right)),
 					TokenType::Slash => if right == 0.0 {
-						Err(InterpreterError::new(op, "Division by zero"))
+						Err(RuntimeError::InterpreterError(InterpreterError::new(op, "Division by zero")))
 					} else {
 						Ok(Literal::Number(left / right))
 					},
@@ -246,14 +269,14 @@ fn is_truthy(ltl: &Literal) -> bool {
 fn unpack_number(ltl: Literal, tk: &Token) -> Result<f64> {
 	match ltl {
 		Literal::Number(x) => Ok(x),
-		_ => Err(InterpreterError::new(tk, "Expected number")),
+		_ => Err(RuntimeError::InterpreterError(InterpreterError::new(tk, "Expected number"))),
 	}
 }
 
 fn unpack_string(ltl: Literal, tk: &Token) -> Result<String> {
 	match ltl {
 		Literal::String(x) => Ok(x),
-		_ => Err(InterpreterError::new(tk, "Expected String")),
+		_ => Err(RuntimeError::InterpreterError(<InterpreterError>::new(tk, "Expected String"))),
 	}
 }
 
@@ -261,14 +284,14 @@ fn unpack_into_string(ltl: Literal, tk: &Token) -> Result<String> {
 	match ltl {
 		Literal::String(x) => Ok(x),
 		Literal::Number(x) => Ok(x.to_string()),
-		_ => Err(InterpreterError::new(tk, "Expected value that can be a String")),
+		_ => Err(RuntimeError::InterpreterError(<InterpreterError>::new(tk, "Expected value that can be a String"))),
 	}
 }
 
 fn unpack_bool(ltl: Literal, tk: &Token) -> Result<bool> {
 	match ltl {
 		Literal::Boolean(x) => Ok(x),
-		_ => Err(InterpreterError::new(tk, "Expected boolean")),
+		_ => Err(RuntimeError::InterpreterError(<InterpreterError>::new(tk, "Expected boolean"))),
 	}
 }
 

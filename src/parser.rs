@@ -120,9 +120,19 @@ impl<'a> Parser<'a> {
             self.while_statement()
         } else if self.curr_match(&vec![TokenType::For]) {
             self.for_statement()
-        } else {
+        } else if self.curr_match(&vec![TokenType::Break]) {
+            self.break_statement()
+        }
+         else {
     		return self.expression_statement()
     	}
+    }
+
+
+    fn break_statement(&mut self) -> Result<Stmt> {
+        let line = self.previous().unwrap().get_line();
+        self.consume(TokenType::Semicolon, "Expected ';' after break.")?;
+        Ok(Stmt::Break(line))
     }
 
     fn while_statement(&mut self) -> Result<Stmt> {
@@ -424,3 +434,4 @@ impl<'a> Parser<'a> {
         Ok(expr)
     }
 }
+

@@ -4,6 +4,7 @@ use crate::tokens::Literal;
 use crate::interpreter::Result;
 use std::collections::HashMap;
 use crate::interpreter::InterpreterError;
+use crate::interpreter::RuntimeError;
 
 pub struct Stack {
 	envs: Vec<Environment>,
@@ -42,7 +43,7 @@ impl Stack {
 				}
 			}
 
-			Err(InterpreterError::new(name, " Undefined variable"))
+			Err(RuntimeError::InterpreterError(<InterpreterError>::new(name, " Undefined variable")))
 		}
 	}
 
@@ -52,7 +53,7 @@ impl Stack {
 		if let Some(lt) = lt {
 			Ok(lt)
 		} else {
-			Err(InterpreterError::new(tk,"Uninitialized variable"))
+			Err(RuntimeError::InterpreterError(<InterpreterError>::new(tk, "Uninitialized variable")))
 		}
 	}
 
@@ -66,7 +67,7 @@ impl Stack {
 				}
 			}
 
-			Err(InterpreterError::new(tk,"Undefined variable"))
+			Err(RuntimeError::InterpreterError(<InterpreterError>::new(tk, "Undefined variable")))
 		}
 	}
 
@@ -93,13 +94,13 @@ impl Environment {
 		if let Some(val) = self.values.get(tk.get_lexeme()) {
 			Ok(val.clone())
 		} else {
-			Err(InterpreterError::new(tk,"Undefined variable"))
+			Err(RuntimeError::InterpreterError(<InterpreterError>::new(tk, "Undefined variable")))
 		}
 	}
 
 	pub fn assign(&mut self, name: &Token, value: Literal) -> Result<()> {
 		if !self.values.contains_key(name.get_lexeme()) {
-			Err(InterpreterError::new(name, " Undefined variable"))
+			Err(RuntimeError::InterpreterError(<InterpreterError>::new(name, " Undefined variable")))
 		} else {
 			self.values.insert(name.get_lexeme().to_owned(), Some(value));
 			Ok(())

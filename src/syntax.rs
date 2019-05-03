@@ -21,7 +21,8 @@ pub enum Stmt {
 	Var(Token, Option<Expr>),
 	Block(Vec<Stmt>),
 	If(Box<Expr>, Box<Stmt>, Box<Option<Stmt>>),
-	While(Box<Expr>, Box<Stmt>)
+	While(Box<Expr>, Box<Stmt>),
+	Break(usize)
 }
 
 impl Stmt {
@@ -32,7 +33,8 @@ impl Stmt {
 			Stmt::Var(name,expr) => visitor.visit_variable(name, expr),
 			Stmt::Block(stmts) => visitor.visit_block_stmt(stmts),
 			Stmt::If(cond, then, otherwise) => visitor.visit_if(cond,then,otherwise),
-			Stmt::While(cond, then) => visitor.visit_while(cond,then)
+			Stmt::While(cond, then) => visitor.visit_while(cond,then),
+			Stmt::Break(line) => visitor.visit_break(*line)
 		}
 	}
 }
@@ -44,6 +46,7 @@ pub trait StmtVisitor <R> {
 	fn visit_block_stmt(self,stmts: &Vec<Stmt>) -> R; 
 	fn visit_if(self, cond: &Expr, then: &Stmt, otherwise: &Option<Stmt>) -> R;
 	fn visit_while(self, cond: &Expr, then: &Stmt) -> R;
+	fn visit_break(self, line: usize) -> R;
 }
 
 pub trait ExprVisitor <R> {

@@ -23,6 +23,7 @@ lazy_static! {
     m.insert("true", TokenType::Literal(Literal::Boolean(true)));
     m.insert("var", TokenType::Var);
     m.insert("while", TokenType::While);
+    m.insert("break", TokenType::Break);
     m
   };
 }
@@ -72,6 +73,7 @@ pub enum TokenType {
   This,
   Var,
   While,
+  Break,
 
   Eof,
 }

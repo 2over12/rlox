@@ -6,7 +6,7 @@ mod syntax;
 mod parser;
 mod interpreter;
 mod environment;
-
+mod context;
 
 use std::io::Write;
 
@@ -44,6 +44,13 @@ pub fn run(src: String) {
 	let tokens = scanner.scan_tokens();
 	let mut parser = Parser::new(tokens,&mut err_hand);
 	let stmts = parser.parse();
+
+	if let Ok(stmts) = &stmts {
+		let context_errors = context::check(stmts);
+		for err in context_errors {
+			err.report(&mut err_hand)
+		}
+	}
 	
 	match stmts {
 		Ok(ref stmts) if !err_hand.had_error => {
