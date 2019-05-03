@@ -28,20 +28,67 @@ impl<'a> Parser<'a> {
     pub fn parse(&mut self) -> Result<Vec<Stmt>> {
         let mut stmts = Vec::new();
         while !self.tokens.is_empty() && !self.curr_match(&vec![TokenType::Eof]){
-        	stmts.push(self.statement()?);
+        	stmts.push(self.declaration()?);
         }
 
         Ok(stmts)
     }
 
+    fn declaration(&mut self) -> Result<Stmt> {
+    	let res = if self.curr_match(&vec![TokenType::Var]) {
+    		self.var_declaration()
+    	} else {
+    		self.statement()
+    	};
+
+    	if let Err(_) = res {
+    		self.synchronize();
+    	}
+
+    	res
+    }
+
+
+    fn var_declaration(&mut self) -> Result<Stmt> {
+    	let name = self.consume(TokenType::Identifier, "Expected variable name.")?;
+
+    	let mut init = Expr::Literal(Literal::Nil);
+    	if self.curr_match(&vec![TokenType::Equal]) {
+    		init = self.expression()?;
+    	}
+
+    	self.consume(TokenType::Semicolon, "Expected ';' after the variable declaration")?;
+    	Ok(Stmt::Var(name,init))
+    }
+
     fn statement(&mut self) -> Result<Stmt> {
     	if self.curr_match(&vec![TokenType::Print]) {
     		return self.print_statement()
-    	} else {
+    	} else if self.curr_match(&vec![TokenType::LeftBrace]) {
+            return self.block()
+        } else {
     		return self.expression_statement()
     	}
     }
 
+    fn block(&mut self) -> Result<Stmt> {
+        let mut statements = Vec::new();
+
+        while !self.check(&TokenType::RightBrace) && !self.is_at_end() {
+            statements.push(self.declaration()?)
+        }
+        self.consume(TokenType::RightBrace, "Expected '}' ater block.")?;
+        Ok(Stmt::Block(statements))
+    }
+
+
+    fn is_at_end(&self) -> bool {
+        if let Some(_) = self.peek() {
+            false
+        } else {
+            true
+        }
+    }
     fn print_statement(&mut self) -> Result<Stmt> {
     	let value = self.expression()?;
     	self.consume(TokenType::Semicolon, "Expected ';' after value")?;
@@ -55,12 +102,41 @@ impl<'a> Parser<'a> {
     }
 
     fn expression(&mut self) -> Result<Expr> {
-        return self.comma();
+        return self.assignment();
+    }
+
+    fn assignment(&mut self) -> Result<Expr> {
+        let expr = self.comma()?;
+
+        if self.curr_match(&vec![TokenType::Equal]) {
+            let equals = self.previous().unwrap();
+            let value = self.assignment()?;
+
+            if let Expr::Var(nm) = expr {
+                let lval = Expr::Assignment(nm,Box::new(value));
+                return Ok(lval);
+            }
+
+            self.error(&equals, "Invalid assignment target.");
+        }
+        
+        Ok(expr)
     }
 
     fn curr_match(&mut self, tokes: &Vec<TokenType>) -> bool {
         for ty in tokes {
             if self.check(ty) {
+                self.advance();
+                return true;
+            }
+        }
+
+        false
+    }
+
+    fn is_ident(&mut self) -> bool {
+        if let Some(x) = self.peek() {
+            if let TokenType::Identifier = x.get_type() {
                 self.advance();
                 return true;
             }
@@ -90,7 +166,7 @@ impl<'a> Parser<'a> {
         false
     }
 
-    fn peek(&mut self) -> Option<&Token> {
+    fn peek(&self) -> Option<&Token> {
         self.tokens.front()
     }
 
@@ -146,6 +222,10 @@ impl<'a> Parser<'a> {
             if let TokenType::Literal(lt) = self.previous().unwrap().get_type().clone() {
                 return Ok(Expr::Literal(lt));
             }
+        }
+
+        if self.is_ident() {
+            return Ok(Expr::Var(self.previous().unwrap()))
         }
 
         if self.curr_match(&vec![TokenType::LeftParen]) {

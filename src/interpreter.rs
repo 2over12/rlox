@@ -5,8 +5,11 @@ use crate::tokens::Literal;
 use crate::syntax::Expr;
 use crate::tokens::Token;
 use crate::tokens::TokenType;
+use crate::environment::Stack;
 
-struct Interpreter;
+struct Interpreter {
+	env: Stack
+}
 
 pub struct InterpreterError {
 	msg: String
@@ -17,29 +20,58 @@ impl InterpreterError {
 		&self.msg
 	}
 
-	fn new(tk: &Token, err: &str) -> InterpreterError {
+	pub fn new(tk: &Token, err: &str) -> InterpreterError {
 		InterpreterError {
 			msg: format!("Error: {}, at: '{}' on line {}", err,tk.get_lexeme(), tk.get_line())
 		}
 	}
+
+	pub fn from(line: usize, lexeme: &str, msg: &str) -> InterpreterError {
+		InterpreterError {
+			msg: format!("Error: {}, at: '{}' on line {}",msg, lexeme, line)
+		}
+	}
 }
 
-type Result<T> = std::result::Result<T,InterpreterError>;
+pub type Result<T> = std::result::Result<T,InterpreterError>;
 
 impl Interpreter {
-	fn evaluate(&self, expr: &Expr) -> Result<Literal> {
+	fn evaluate(&mut self, expr: &Expr) -> Result<Literal> {
 		expr.accept(self)
 	}
 
-	fn execute(&self, stmt: &Stmt) -> Result<()> {
+	fn execute(&mut self, stmt: &Stmt) -> Result<()> {
 		stmt.accept(self)
 	}
 }
 
-impl StmtVisitor<Result<()>> for &Interpreter {
+impl StmtVisitor<Result<()>> for &mut Interpreter {
 	fn visit_print(self, expr: &Expr) -> Result<()> {
 		let val = self.evaluate(expr)?;
 		println!("{}", val.to_string());
+		Ok(())
+	}
+
+	fn visit_block_stmt(self, stmts: &Vec<Stmt>) -> Result<()> {
+		self.env.push_new();
+
+		for st in stmts {
+			let res = self.execute(st);
+
+			if let Err(_) = res {
+				self.env.restore_old();
+				return res;
+			}
+		}
+		
+		self.env.restore_old();
+		Ok(())
+		
+	}
+
+	fn visit_variable(self, name: &Token, init: &Expr) -> Result<()> {
+		let value = self.evaluate(init)?;
+		self.env.define(name.get_lexeme().to_owned(), value);
 		Ok(())
 	}
 
@@ -51,10 +83,15 @@ impl StmtVisitor<Result<()>> for &Interpreter {
 }
 
 
-impl ExprVisitor<Result<Literal>> for &Interpreter {
+impl ExprVisitor<Result<Literal>> for &mut Interpreter {
 
 	fn visit_literal(self, ltrl: &Literal) -> Result<Literal> {
 		Ok(ltrl.clone())
+	}
+
+
+	fn visit_variable_expr(self, name: &Token) -> Result<Literal> {
+		self.env.get(name)
 	}
 
 	fn visit_grouping(self, exp: &Expr) -> Result<Literal> {
@@ -73,9 +110,16 @@ impl ExprVisitor<Result<Literal>> for &Interpreter {
 		}
 	}
 
+	fn visit_assignment(self, name: &Token, value: &Expr) -> Result<Literal> {
+		let value = self.evaluate(value)?;
+
+		self.env.assign(name, value.clone())?;
+		Ok(value)
+	}
+
 
 	fn visit_ternary(self, op: &Token, left: &Expr, middle: &Expr, right: &Expr) -> Result<Literal> {
-		let left = left.accept(self)?;
+		let left = self.evaluate(left)?;
 		let left = unpack_bool(left, op)?;
 		if left {
 			middle.accept(self)
@@ -85,8 +129,8 @@ impl ExprVisitor<Result<Literal>> for &Interpreter {
 	}
 
 	fn visit_binary(self, left: &Expr, op: &Token, right: &Expr) -> Result<Literal> {
-		let left = left.accept(self)?;
-		let right = right.accept(self)?;
+		let left = self.evaluate(left)?;
+		let right = self.evaluate(right)?;
 
 		match op.get_type() {
 			TokenType::Minus | TokenType::Slash | TokenType::Star | TokenType::Greater |
@@ -145,7 +189,6 @@ fn is_equal(f: &Literal, s: &Literal) -> bool {
 		} else {
 			false
 		},
-		Literal::Identifier => f==s,
 		Literal::Nil => f==s
 	}
 }
@@ -188,7 +231,9 @@ fn unpack_bool(ltl: Literal, tk: &Token) -> Result<bool> {
 }
 
 pub fn interpret(statements: &Vec<Stmt>) -> Result<()> {
-	let visit = Interpreter;
+	let mut visit = Interpreter {
+		env: Stack::new()
+	};
 	
 	for stmt in statements {
 		visit.execute(stmt)?;

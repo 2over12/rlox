@@ -55,6 +55,7 @@ pub enum TokenType {
   LessEqual,
 
   // Literals.
+  Identifier,
   Literal(Literal),
 
   // Keywords.
@@ -77,7 +78,6 @@ pub enum TokenType {
 
 #[derive(Debug, Clone)]
 pub enum Literal {
-  Identifier,
   Number(f64),
   String(String),
   Nil,
@@ -98,7 +98,6 @@ impl std::cmp::PartialEq for Literal {
 impl ToString for Literal {
     fn to_string(&self) -> String {
       match self {
-        Literal::Identifier => "ident".to_owned(),
         Literal::Number(val) => val.to_string(),
         Literal::String(s) => s.clone(),
         Literal::Boolean(t) => t.to_string(),
@@ -304,7 +303,7 @@ impl<'a> Scanner<'a> {
     if let Some(tok) = KEYWORD_MAP.get(name) {
       self.add_token(tok.clone());
     } else {
-      self.add_token(TokenType::Literal(Literal::Identifier))
+      self.add_token(TokenType::Identifier)
     }
   }
 

@@ -5,6 +5,7 @@ mod tokens;
 mod syntax;
 mod parser;
 mod interpreter;
+mod environment;
 
 
 use std::io::Write;
