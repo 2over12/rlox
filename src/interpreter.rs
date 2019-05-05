@@ -6,8 +6,10 @@ use crate::syntax::Expr;
 use crate::tokens::Token;
 use crate::tokens::TokenType;
 use crate::environment::Stack;
+use crate::functions::Callable;
+use crate::functions::LoxCalls;
 
-struct Interpreter {
+pub struct Interpreter {
 	env: Stack
 }
 
@@ -134,6 +136,15 @@ impl StmtVisitor<Result<()>> for &mut Interpreter {
 
 
 impl ExprVisitor<Result<Literal>> for &mut Interpreter {
+
+	fn visit_call(self, callee: &Expr, tk: &Token, args: &Vec<Expr>) -> Result<Literal> {
+		let callee = self.evaluate(callee)?;
+
+		let args = args.into_iter().map(|x|self.evaluate(x)).collect::<Result<Vec<_>>>();
+
+		let func = Callable::from(callee)?;
+		func.call(self, args)
+	}
 
 	fn visit_literal(self, ltrl: &Literal) -> Result<Literal> {
 		Ok(ltrl.clone())

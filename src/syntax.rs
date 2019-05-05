@@ -10,7 +10,8 @@ pub enum Expr {
 	Var(Token),
 	Unary(Token, Box<Expr>),
 	Assignment(Token, Box<Expr>),
-	Logical(Box<Expr>, Token, Box<Expr>)
+	Logical(Box<Expr>, Token, Box<Expr>),
+	Call(Box<Expr>, Token, Vec<Expr>),
 }
 
 
@@ -58,6 +59,7 @@ pub trait ExprVisitor <R> {
 	fn visit_assignment(self, name: &Token, value: &Expr) -> R;
 	fn visit_variable_expr(self, name: &Token) -> R;
 	fn visit_logical(self, left: &Expr, op: &Token, right: &Expr) -> R;
+	fn visit_call(self, callee: &Expr, paren: &Token, args: &Vec<Expr>) -> R;
 }
 
 impl Expr {
@@ -70,7 +72,8 @@ impl Expr {
 			Expr::Ternary(op, left, middle, right) => visitor.visit_ternary(op, left, middle, right),
 			Expr::Var(nm) => visitor.visit_variable_expr(nm),
 			Expr::Assignment(nm, val) => visitor.visit_assignment(nm, val),
-			Expr::Logical(left,op,right) => visitor.visit_logical(left, op, right)
+			Expr::Logical(left,op,right) => visitor.visit_logical(left, op, right),
+			Expr::Call(callee, paren, args) => visitor.visit_call(callee,paren,args)
 		}
 	} 
 }
@@ -88,6 +91,20 @@ impl ExprVisitor<String> for &PrettyPrint {
 		total.push(' ');
 		total.push_str(&right.accept(self));
 		total.push(')');
+		total
+	}
+
+	fn visit_call(self,left: &Expr, paren: &Token, args: &Vec<Expr>) -> String {
+		let mut total = String::new();
+		total.push('(');
+		total.push_str(&left.accept(self));
+		total.push(' ');
+
+		for xp in args.iter() {
+			total.push_str(&xp.accept(self));
+			total.push(' ');
+		}
+
 		total
 	}
 

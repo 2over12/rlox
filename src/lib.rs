@@ -7,6 +7,7 @@ mod parser;
 mod interpreter;
 mod environment;
 mod context;
+mod functions;
 
 use std::io::Write;
 
